@@ -26,7 +26,8 @@
 #include <OneWire.h>
 #include "xnsclient.h"
 
-#define APP_NAME		"xns.sensors.tripletemp"
+#define HW_NAME		"xns.sensors.tripletemp"
+#define HW_REV		"A"
 const int version[] = { 1, 0, 0, 20 };
 
 // Dallas Temperature (18B20) sensor
@@ -52,7 +53,7 @@ void setup() {
 	Serial.begin(115200);
 	while (!Serial);
 
-	xnsClient.begin(APP_NAME, version, -1, Serial);
+	xnsClient.begin(HW_NAME, HW_REV, version, -1, Serial);
 	xnsClient.setAliveMessageInterval(60);
 	xnsClient.setMqttMessageCallback(mqttMessageReceived);
 }
