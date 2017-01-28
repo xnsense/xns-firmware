@@ -6,6 +6,13 @@
 > and activate the door opener input enough times to perform the requested action.
 > A dallas temp sensor is also added to report temperatures
 
+
+This device is based on the [xns-client](https://github.com/xnsense/xns-client) arduino library, which takes care of
+* SSID / Password storage in EEPROM (boot as AP to set config)
+* MQTT communication using json
+* OTA updates by passing a URL in mqtt message
+* Fitting the device into the XNSENSE IoT ecosystem
+
 ## Supported commands
 
 
