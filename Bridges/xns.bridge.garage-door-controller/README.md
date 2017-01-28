@@ -11,7 +11,7 @@ This device is based on the [xns-client](https://github.com/xnsense/xns-client) 
 * SSID / Password storage in EEPROM (boot as AP to set config)
 * MQTT communication using json
 * OTA updates by passing a URL in mqtt message
-* Fitting the device into the [XNSENSE IoT ecosystem](http://www.xnsense.com)
+* Fitting the device into the [XNSENSE IoT ecosystem](http://www.xnsense.no/)
 
 ## Supported commands
 
