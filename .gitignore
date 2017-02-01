@@ -1,3 +1,5 @@
 **/__vm/*.xml
+*.user
 **/Debug/*
+**/Release/*
 .suo

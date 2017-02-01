@@ -15,14 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <None Include="xns.sensor.in-out-aux-temp.ino" />
+    <None Include="xns_generic_open_collector_switch.ino" />
   </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="__vm\.xns.sensor.in-out-aux-temp.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="__vm\.xns.sensor.in-out-aux-temp.vsarduino.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-  </ItemGroup>
+ 
 </Project>

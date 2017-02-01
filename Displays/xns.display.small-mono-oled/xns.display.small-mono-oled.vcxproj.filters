@@ -15,14 +15,19 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <None Include="xns.sensor.in-out-aux-temp.ino" />
+    <ClInclude Include="xnsense.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="__vm\.xns.display.small-mono-oled.vsarduino.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="__vm\.xns.sensor.in-out-aux-temp.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="__vm\.xns.sensor.in-out-aux-temp.vsarduino.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
+    <ClCompile Include="xnsense.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="xns.display.small-mono-oled.ino" />
   </ItemGroup>
 </Project>

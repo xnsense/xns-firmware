@@ -15,13 +15,13 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <None Include="xns.sensor.in-out-aux-temp.ino" />
+    <None Include="garage-door-controller.ino" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="__vm\.xns.sensor.in-out-aux-temp.h">
+    <ClInclude Include="__vm\.garage-door-controller.vsarduino.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="__vm\.xns.sensor.in-out-aux-temp.vsarduino.h">
+    <ClInclude Include="__vm\.xns.bridge.garage-door-controller.vsarduino.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
