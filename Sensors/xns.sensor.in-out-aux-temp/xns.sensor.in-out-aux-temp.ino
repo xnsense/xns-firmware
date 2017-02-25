@@ -1,5 +1,27 @@
 /*
- Name:		TempSensor.ino
+MIT License
+
+Copyright (c) 2017 xnsense as
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+ Name:		xns.sensor.in-out-aux-temp.ino
  Created:	10/26/2016 8:22:46 PM
  Author:	roarf
 */
@@ -7,33 +29,24 @@
 #include <SPI.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
-/*
-#include <ESP8266httpUpdate.h>
-#include <ESP8266HTTPClient.h>
-#include <WiFiUdp.h>
-#include <WiFiServer.h>
-#include <WiFiClientSecure.h>
-#include <WiFiClient.h>
-#include <ESP8266WiFiType.h>
-#include <ESP8266WiFiSTA.h>
-#include <ESP8266WiFiScan.h>
-#include <ESP8266WiFiMulti.h>
-#include <ESP8266WiFiGeneric.h>
-#include <ESP8266WiFiAP.h>
-#include <ESP8266WiFi.h>
-*/
 #include <DallasTemperature.h>
 #include <OneWire.h>
 #include "xnsclient.h"
 
+<<<<<<< HEAD
+#define hw_name		"xns.sensor.in-out-aux-temp"
+#define hw_revision    "A"
+const int fw_revision[] = { 1, 0, 0, 1 };
+=======
 #define HW_NAME		"xns.sensors.tripletemp"
 #define HW_REV		"A"
 const int version[] = { 1, 0, 0, 20 };
+>>>>>>> origin/master
 
 // Dallas Temperature (18B20) sensor
-#define TEMP_PIN1 12
-#define TEMP_PIN2 4
-#define TEMP_PIN3 5
+#define TEMP_PIN1 12 //Inside the box
+#define TEMP_PIN2 4 //Outside the box
+#define TEMP_PIN3 5 //Extra, AUX
 
 OneWire oneWire1(TEMP_PIN1);
 DallasTemperature tempSensor1(&oneWire1);
@@ -53,7 +66,11 @@ void setup() {
 	Serial.begin(115200);
 	while (!Serial);
 
+<<<<<<< HEAD
+	xnsClient.begin(hw_name, hw_revision,fw_revision, -1, Serial);
+=======
 	xnsClient.begin(HW_NAME, HW_REV, version, -1, Serial);
+>>>>>>> origin/master
 	xnsClient.setAliveMessageInterval(60);
 	xnsClient.setMqttMessageCallback(mqttMessageReceived);
 }
@@ -91,11 +108,11 @@ void loop() {
 		JsonObject& json = jsonBuffer.createObject();
 		JsonObject& temperatures = json.createNestedObject("Temperatures");
 		if (temp1 != -127)
-			temperatures["hagestue"] = String(temp1);
+			temperatures["in"] = String(temp1);
 		if (temp2 != -127)
-			temperatures["inne"] = String(temp2);
+			temperatures["out"] = String(temp2);
 		if (temp3 != -127)
-			temperatures["ute"] = String(temp3);
+			temperatures["aux"] = String(temp3);
 
 		xnsClient.sendMqttData(json);
 		
