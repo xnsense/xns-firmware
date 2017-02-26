@@ -1,38 +1,17 @@
-/**************************************************************
- *
- * For this example, you need to install PubSubClient library:
- *   https://github.com/knolleary/pubsubclient/releases/latest
- *   or from http://librarymanager/all#PubSubClient
- *
- * TinyGSM Getting Started guide:
- *   http://tiny.cc/tiny-gsm-readme
- *
- **************************************************************
- * Use Mosquitto client tools to work with MQTT
- *   Ubuntu/Linux: sudo apt-get install mosquitto-clients
- *   Windows:      https://mosquitto.org/download/
- *
- * Subscribe for messages:
- *   mosquitto_sub -h test.mosquitto.org -t GsmClientTest/init -t GsmClientTest/ledStatus -q 1
- * Toggle led:
- *   mosquitto_pub -h test.mosquitto.org -t GsmClientTest/led -q 1 -m "toggle"
- *
- * You can use Node-RED for wiring together MQTT-enabled devices
- *   https://nodered.org/
- * Also, take a look at these additional Node-RED modules:
- *   node-red-contrib-blynk-websockets
- *   node-red-dashboard
- *
- **************************************************************/
+
 
 // Select your modem:
 //#define TINY_GSM_MODEM_SIM800
 //#define TINY_GSM_MODEM_SIM900
 #define TINY_GSM_MODEM_A7
 //#define TINY_GSM_MODEM_M590
+#define mqtt_server "79.161.196.15"
+#define mqtt_port  1883
 
+#define TINY_GSM_DEBUG Serial
 #include <TinyGsmClient.h>
 #include <PubSubClient.h>
+#include <ArduinoJson.h>
 
 // Your GPRS credentials
 // Leave empty, if missing user or pass
@@ -49,11 +28,14 @@ TinyGsm modem(SerialAT);
 TinyGsmClient client(modem);
 PubSubClient mqtt(client);
 
-const char* broker = "broker.hivemq.com";
+const char * clientId = "11:11:11:11:11:11";
+const char * username = "";
+const char * password = "";
 
-const char* topicLed = "GsmClientTest/led";
-const char* topicInit = "GsmClientTest/init";
-const char* topicLedStatus = "GsmClientTest/ledStatus";
+const char* publishTopic = "sensors/out/11:11:11:11:11:11";
+const char* subscribeTopic = "";
+unsigned long lastkeepAliveTime = 0;
+
 
 #define LED_PIN 5
 int ledStatus = LOW;
@@ -94,54 +76,108 @@ void setup() {
     while (true);
   }
   Serial.println(" OK");
-
+  Serial.print("Signal Quality: ");
+  Serial.println(modem.getSignalQuality());
   // MQTT Broker setup
-  mqtt.setServer(broker, 1883);
-  mqtt.setCallback(mqttCallback);
+  mqtt.setServer(mqtt_server, mqtt_port);
 }
 
-boolean mqttConnect() {
-  Serial.print("Connecting to ");
-  Serial.print(broker);
-  if (!mqtt.connect("GsmClientTest")) {
-    Serial.println(" fail");
-    return false;
+
+void loop() 
+{
+
+  //getSignalQuality() //returns int
+//
+//  switch(modem.getRegistrationStatus())
+//  {
+//    case 1:
+//    case 5:
+//    //Serial.println("Start");
+//    if (!mqtt.connected()) 
+//    {
+//      yield(); 
+//      //Serial.println("Middel");
+//      reconnect();
+//    }
+//    
+//     yield();
+//     //Serial.println("Almost End");
+//     mqtt.loop();
+//     //Serial.println("End");  
+//     break;
+//     default: 
+//     Serial.println("Lost Connection");
+//     break;    
+//  }
+    
+    
+    
+    
+  mqtt.loop();
+  delay(10);
+  if (!mqtt.connected()) 
+  {
+    yield(); 
+    Serial.println("Re-connect");
+    reconnect();
   }
-  Serial.println(" OK");
-  mqtt.publish(topicInit, "GsmClientTest started");
-  mqtt.subscribe(topicLed);
-  return mqtt.connected();
+
+  yield();
+  if(millis() - lastkeepAliveTime > 60000){
+      lastkeepAliveTime = millis();
+      Serial.println("Send MQTT Alive");
+      StaticJsonBuffer<500> jsonBuffer;
+      JsonObject& json = jsonBuffer.createObject();
+      json["id"] = clientId;
+      json["up"] = millis() / 1000;
+      json["hwName"] = "xns.test.gsm";
+      json["hwRevision"] = "A";
+      json["fwRevision"] = "1.0.0.1";
+      json["message"] = "I'm alive!";
+    
+      String msg;
+      json.printTo(msg);
+    
+      mqtt.publish(publishTopic, msg.c_str());
+  }
+  delay(5000);
 }
 
-void loop() {
-
-  if (mqtt.connected()) {
-    mqtt.loop();
-  } else {
-    // Reconnect every 10 seconds
-    unsigned long t = millis();
-    if (t - lastReconnectAttempt > 10000L) {
-      lastReconnectAttempt = t;
-      if (mqttConnect()) {
-        lastReconnectAttempt = 0;
-      }
+void reconnect() {
+  // Loop until we're reconnected
+  while (!mqtt.connected()) 
+  {
+    Serial.print("Attempting MQTT connection...");
+    // Attempt to connect
+    yield();
+    if (mqtt.connect(clientId)) 
+    {
+      yield();
+      Serial.println("connected");
+      yield();
+      // Once connected, publish an announcement...
+      StaticJsonBuffer<500> jsonBuffer;
+      JsonObject& json = jsonBuffer.createObject();
+      json["id"] = clientId;
+      json["up"] = millis() / 1000;
+      json["hwName"] = "xns.test.gsm";
+      json["hwRevision"] = "A";
+      json["fwRevision"] = "1.0.0.1";
+      json["message"] = "Connected!";
+      
+      String msg;
+      json.printTo(msg);
+    
+      mqtt.publish(publishTopic, msg.c_str());
+      yield();
+    } else 
+    {
+      Serial.print("failed, rc=");
+      Serial.print(mqtt.state());
+      Serial.println(" try again in 5 seconds");
+      // Wait 5 seconds before retrying
+      delay(5000);
     }
-  }
-
-}
-
-void mqttCallback(char* topic, byte* payload, unsigned int len) {
-  Serial.print("Message arrived [");
-  Serial.print(topic);
-  Serial.print("]: ");
-  Serial.write(payload, len);
-  Serial.println();
-
-  // Only proceed if incoming message's topic matches
-  if (String(topic) == topicLed) {
-    ledStatus = !ledStatus;
-    digitalWrite(LED_PIN, ledStatus);
-    mqtt.publish(topicLedStatus, ledStatus ? "1" : "0");
   }
 }
 
