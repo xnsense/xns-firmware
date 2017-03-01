@@ -12,6 +12,8 @@
 #include <TinyGsmClient.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <DallasTemperature.h>
+#include <OneWire.h>
 
 // Your GPRS credentials
 // Leave empty, if missing user or pass
@@ -19,10 +21,27 @@ const char apn[]  = "telenor.smart";
 const char user[] = "";
 const char pass[] = "";
 
+// Dallas Temperature (18B20) sensor
+#define TEMP_PIN1 12 //Inside the box
+#define TEMP_PIN2 4 //Outside the box
+#define TEMP_PIN3 5 //Extra, AUX
+
+OneWire oneWire1(TEMP_PIN1);
+DallasTemperature tempSensor1(&oneWire1);
+OneWire oneWire2(TEMP_PIN2);
+DallasTemperature tempSensor2(&oneWire2);
+OneWire oneWire3(TEMP_PIN3);
+DallasTemperature tempSensor3(&oneWire3);
+
+float lastTemp1 = 0;
+float lastTemp2 = 0;
+float lastTemp3 = 0;
+
+
 
 // or Software Serial on Uno, Nano
 #include <SoftwareSerial.h>
-SoftwareSerial SerialAT(12, 13); // RX, TX
+SoftwareSerial SerialAT(13, 14); // RX, TX
 
 TinyGsm modem(SerialAT);
 TinyGsmClient client(modem);
@@ -36,14 +55,9 @@ const char* publishTopic = "sensors/out/11:11:11:11:11:11";
 const char* subscribeTopic = "";
 unsigned long lastkeepAliveTime = 0;
 
-
-#define LED_PIN 5
-int ledStatus = LOW;
-
 long lastReconnectAttempt = 0;
 
 void setup() {
-  pinMode(LED_PIN, OUTPUT);
 
   // Set console baud rate
   Serial.begin(115200);
@@ -76,71 +90,114 @@ void setup() {
     while (true);
   }
   Serial.println(" OK");
-  Serial.print("Signal Quality: ");
-  Serial.println(modem.getSignalQuality());
+  Serial.print("Signal Quality: "); Serial.println(modem.getSignalQuality());
   // MQTT Broker setup
   mqtt.setServer(mqtt_server, mqtt_port);
+
+  Serial.println("Check Temp Sensors");
+  tempSensor1.requestTemperatures();
+  tempSensor2.requestTemperatures();
+  tempSensor3.requestTemperatures();
+
+  float temp1 = tempSensor1.getTempCByIndex(0);
+  float temp2 = tempSensor2.getTempCByIndex(0);
+  float temp3 = tempSensor3.getTempCByIndex(0);
+
+  Serial.println(temp1);
+  Serial.println(temp2);
+  Serial.println(temp3);
+  
 }
 
 
 void loop() 
 {
-
-  //getSignalQuality() //returns int
-//
+  
+  //modem.getSignalQuality() //returns int
 //  switch(modem.getRegistrationStatus())
 //  {
 //    case 1:
 //    case 5:
-//    //Serial.println("Start");
-//    if (!mqtt.connected()) 
-//    {
-//      yield(); 
-//      //Serial.println("Middel");
-//      reconnect();
-//    }
-//    
-//     yield();
-//     //Serial.println("Almost End");
-//     mqtt.loop();
-//     //Serial.println("End");  
-//     break;
-//     default: 
-//     Serial.println("Lost Connection");
-//     break;    
+//      
+//      }      
+//    break;
+//    default: 
+//    Serial.println("Lost Connection");
+//    Serial.print("Signal Quality: "); Serial.println(modem.getSignalQuality());
+//    break;    
 //  }
-    
-    
-    
-    
+
   mqtt.loop();
   delay(10);
   if (!mqtt.connected()) 
   {
-    yield(); 
-    Serial.println("Re-connect");
-    reconnect();
+  yield();
+  reconnect();
+  }
+  yield();
+  checkTempAndSend();
+  yield();
+  if(millis() - lastkeepAliveTime > 900000){
+    lastkeepAliveTime = millis();
+    Serial.println("Send MQTT Alive");
+    StaticJsonBuffer<500> jsonBuffer;
+    JsonObject& json = jsonBuffer.createObject();
+    json["id"] = clientId;
+    json["up"] = millis() / 1000;
+    json["hwName"] = "xns.test.gsm";
+    json["hwRevision"] = "A";
+    json["fwRevision"] = "1.0.0.1";
+    json["message"] = "I'm alive!";
+    String msg;
+    json.printTo(msg);
+    mqtt.publish(publishTopic, msg.c_str());
   }
 
-  yield();
-  if(millis() - lastkeepAliveTime > 60000){
-      lastkeepAliveTime = millis();
-      Serial.println("Send MQTT Alive");
-      StaticJsonBuffer<500> jsonBuffer;
-      JsonObject& json = jsonBuffer.createObject();
-      json["id"] = clientId;
-      json["up"] = millis() / 1000;
-      json["hwName"] = "xns.test.gsm";
-      json["hwRevision"] = "A";
-      json["fwRevision"] = "1.0.0.1";
-      json["message"] = "I'm alive!";
+  delay(1000);
+}
+
+void checkTempAndSend()
+{
+
+  tempSensor1.requestTemperatures();
+  tempSensor2.requestTemperatures();
+  tempSensor3.requestTemperatures();
+
+  float temp1 = tempSensor1.getTempCByIndex(0);
+  float temp2 = tempSensor2.getTempCByIndex(0);
+  float temp3 = tempSensor3.getTempCByIndex(0);
+
+
+  if ( abs(lastTemp1 - temp1) > 0.25 || abs(lastTemp2 - temp2) > 0.25 || abs(lastTemp3 - temp3) > 0.25 )
+  {
+    StaticJsonBuffer<500> jsonBuffer;
+    JsonObject& json = jsonBuffer.createObject();
+    JsonObject& data = jsonBuffer.createObject();
+    JsonObject& temperatures = data.createNestedObject("Temperatures");
+    if (temp1 != -127)
+      temperatures["in"] = String(temp1);
+    if (temp2 != -127)
+      temperatures["out"] = String(temp2);
+    if (temp3 != -127)
+      temperatures["aux"] = String(temp3);
+    data["SignalQuality"] = modem.getSignalQuality();
     
-      String msg;
-      json.printTo(msg);
+    json["id"] = clientId;
+    json["up"] = millis() / 1000;
+    json["hwName"] = "xns.test.gsm";
+    json["hwRevision"] = "A";
+    json["fwRevision"] = "1.0.0.1";
+    json["data"] = data;
+
     
-      mqtt.publish(publishTopic, msg.c_str());
+    String msg;
+    json.printTo(msg);
+    mqtt.publish(publishTopic, msg.c_str());
+    Serial.println(msg);
+    lastTemp1 = temp1;
+    lastTemp2 = temp2;
+    lastTemp3 = temp3;  
   }
-  delay(5000);
 }
 
 void reconnect() {
