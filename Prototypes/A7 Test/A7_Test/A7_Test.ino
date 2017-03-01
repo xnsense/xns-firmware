@@ -52,7 +52,7 @@ const char * username = "";
 const char * password = "";
 
 const char* publishTopic = "sensors/out/11:11:11:11:11:11";
-const char* subscribeTopic = "";
+const char* subscribeTopic = "sensors/in/11:11:11:11:11:11";
 unsigned long lastkeepAliveTime = 0;
 
 long lastReconnectAttempt = 0;
@@ -71,6 +71,12 @@ void setup() {
   // Restart takes quite some time
   // To skip it, call init() instead of restart()
   Serial.println("Initializing modem...");
+  
+  pinMode(16, OUTPUT);
+  digitalWrite(16, HIGH);
+  delay(2000);
+  digitalWrite(16, LOW);
+  
   modem.restart();
 
   // Unlock your SIM card with a PIN
@@ -93,7 +99,8 @@ void setup() {
   Serial.print("Signal Quality: "); Serial.println(modem.getSignalQuality());
   // MQTT Broker setup
   mqtt.setServer(mqtt_server, mqtt_port);
-
+  mqtt.setCallback(mqttCallback);
+  
   Serial.println("Check Temp Sensors");
   tempSensor1.requestTemperatures();
   tempSensor2.requestTemperatures();
@@ -109,6 +116,31 @@ void setup() {
   
 }
 
+void mqttCallback(char* topic, byte* payload, unsigned int len) 
+{
+  Serial.println("Incomming Message");
+  char message[1024];
+  for (int i = 0; i < len; i++)
+    message[i] = payload[i];
+  message[len] = 0;
+
+  DynamicJsonBuffer jsonBuffer;
+  JsonObject& json = jsonBuffer.parseObject(message);
+  if (getJsonValue(json, "command").equals("Echo"))
+    {
+      String vMessage = String("Echo: ") + getJsonValue(json, "message");
+      sendMqttMessage(vMessage);
+    }
+}
+
+String getJsonValue(JsonObject& json, String key)
+{
+  for (JsonObject::iterator it = json.begin(); it != json.end(); ++it) {
+    if (key.equals(it->key))
+      return String(it->value.asString());
+  }
+  return String("");
+}
 
 void loop() 
 {
@@ -140,6 +172,14 @@ void loop()
   if(millis() - lastkeepAliveTime > 900000){
     lastkeepAliveTime = millis();
     Serial.println("Send MQTT Alive");
+    sendMqttMessage("I'm alive");
+  }
+
+  delay(1000);
+}
+
+void sendMqttMessage(String messageSend)
+{
     StaticJsonBuffer<500> jsonBuffer;
     JsonObject& json = jsonBuffer.createObject();
     json["id"] = clientId;
@@ -147,13 +187,10 @@ void loop()
     json["hwName"] = "xns.test.gsm";
     json["hwRevision"] = "A";
     json["fwRevision"] = "1.0.0.1";
-    json["message"] = "I'm alive!";
+    json["message"] = messageSend;
     String msg;
     json.printTo(msg);
-    mqtt.publish(publishTopic, msg.c_str());
-  }
-
-  delay(1000);
+    mqtt.publish(publishTopic, msg.c_str());  
 }
 
 void checkTempAndSend()
@@ -213,19 +250,8 @@ void reconnect() {
       Serial.println("connected");
       yield();
       // Once connected, publish an announcement...
-      StaticJsonBuffer<500> jsonBuffer;
-      JsonObject& json = jsonBuffer.createObject();
-      json["id"] = clientId;
-      json["up"] = millis() / 1000;
-      json["hwName"] = "xns.test.gsm";
-      json["hwRevision"] = "A";
-      json["fwRevision"] = "1.0.0.1";
-      json["message"] = "Connected!";
-      
-      String msg;
-      json.printTo(msg);
-    
-      mqtt.publish(publishTopic, msg.c_str());
+      mqtt.subscribe(subscribeTopic);
+      sendMqttMessage("Connected");
       yield();
     } else 
     {
