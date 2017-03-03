@@ -71,16 +71,14 @@ void setup() {
   // Restart takes quite some time
   // To skip it, call init() instead of restart()
   Serial.println("Initializing modem...");
-  
+
+  //Power modem
   pinMode(16, OUTPUT);
   digitalWrite(16, HIGH);
   delay(2000);
   digitalWrite(16, LOW);
   
   modem.restart();
-
-  // Unlock your SIM card with a PIN
-  //modem.simUnlock("1234");
 
   Serial.print("Waiting for network...");
   if (!modem.waitForNetwork()) {
@@ -95,6 +93,7 @@ void setup() {
     Serial.println(" fail");
     while (true);
   }
+  
   Serial.println(" OK");
   Serial.print("Signal Quality: "); Serial.println(modem.getSignalQuality());
   // MQTT Broker setup
@@ -144,21 +143,6 @@ String getJsonValue(JsonObject& json, String key)
 
 void loop() 
 {
-  
-  //modem.getSignalQuality() //returns int
-//  switch(modem.getRegistrationStatus())
-//  {
-//    case 1:
-//    case 5:
-//      
-//      }      
-//    break;
-//    default: 
-//    Serial.println("Lost Connection");
-//    Serial.print("Signal Quality: "); Serial.println(modem.getSignalQuality());
-//    break;    
-//  }
-
   mqtt.loop();
   delay(10);
   if (!mqtt.connected()) 
@@ -226,7 +210,6 @@ void checkTempAndSend()
     json["fwRevision"] = "1.0.0.1";
     json["data"] = data;
 
-    
     String msg;
     json.printTo(msg);
     mqtt.publish(publishTopic, msg.c_str());
@@ -237,30 +220,70 @@ void checkTempAndSend()
   }
 }
 
-void reconnect() {
-  // Loop until we're reconnected
-  while (!mqtt.connected()) 
+void reconnect() 
+{
+  int retries = 0;
+  switch(modem.getRegistrationStatus())
   {
-    Serial.print("Attempting MQTT connection...");
-    // Attempt to connect
-    yield();
-    if (mqtt.connect(clientId)) 
-    {
-      yield();
-      Serial.println("connected");
-      yield();
-      // Once connected, publish an announcement...
-      mqtt.subscribe(subscribeTopic);
-      sendMqttMessage("Connected");
-      yield();
-    } else 
-    {
-      Serial.print("failed, rc=");
-      Serial.print(mqtt.state());
-      Serial.println(" try again in 5 seconds");
-      // Wait 5 seconds before retrying
-      delay(5000);
-    }
+    case 1:
+    case 5:
+      // Loop until we're reconnected
+      while (!mqtt.connected()) 
+      {
+        retries += 1;
+        Serial.print("Attempting MQTT connection...");
+        // Attempt to connect
+        yield();
+        if (mqtt.connect(clientId)) 
+        {
+          yield();
+          Serial.println("connected");
+          yield();
+          // Once connected, publish an announcement...
+          mqtt.subscribe(subscribeTopic);
+          sendMqttMessage("Connected");
+          yield();
+        } else 
+        {
+          Serial.print("failed, rc=");
+          Serial.print(mqtt.state());
+          Serial.println(" try again in 5 seconds");
+          // Wait 3 seconds before retrying
+          delay(3000);
+          //Try to restart modem if MQTT cannot connect after 5 times
+          if(retries == 5)
+          {
+            reConnectModem();  
+            retries == 0;
+          }
+        }
+      }      
+    break;
+    default:
+      Serial.println("Lost Connection");
+      reConnectModem();
+      break;    
   }
+}
+
+void reConnectModem()
+{
+    yield();
+    modem.restart();
+    yield();
+    Serial.print("Waiting for network...");
+    if (!modem.waitForNetwork()) {
+      Serial.println(" fail");
+      while (true);
+    }
+    Serial.println(" OK");
+    yield();
+    Serial.print("Connecting to ");
+    Serial.print(apn);
+    yield();
+    if (!modem.gprsConnect(apn, user, pass)) {
+      Serial.println(" fail");
+    }
+    yield();
 }
 
