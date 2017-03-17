@@ -1,7 +1,8 @@
 
 
 #define TINY_GSM_MODEM_A7
-#define mqtt_server "79.161.196.15"
+//#define mqtt_server "79.161.196.15" //roar
+#define mqtt_server "79.161.226.132" //JanCB
 #define mqtt_port  1883
 
 #define TINY_GSM_DEBUG Serial
@@ -39,13 +40,12 @@ TinyGsm modem(SerialAT);
 TinyGsmClient client(modem);
 PubSubClient mqtt(client);
 
-const char * clientId = "11:11:11:11:11:11";
+const char * clientId = "22:22:22:22:22:22";
 const char * username = "";
 const char * password = "";
 
-const char* publishTopic = "sensors/out/11:11:11:11:11:11";
-const char* subscribeTopic = "sensors/in/11:11:11:11:11:11";
-unsigned long lastkeepAliveTime = 0;
+const char* publishTopic = "sensors/out/22:22:22:22:22:22";
+const char* subscribeTopic = "sensors/in/22:22:22:22:22:22";
 
 long lastReconnectAttempt = 0;
 
@@ -61,12 +61,20 @@ void setup() {
   float lastTemp1 = 0;
   float lastTemp2 = 0;
   float lastTemp3 = 0;
-
+  int lastkeepAliveCnt = 0;
+  
   //Open eeprom and get value on adr 1,2,3
   EEPROM.begin(512);
   lastTemp1 = EEPROM.read(0);
   lastTemp2 = EEPROM.read(1);
   lastTemp3 = EEPROM.read(2);
+  
+  //Get lastKeepAliveCnt and multiply with 1
+  lastkeepAliveCnt = EEPROM.read(3);
+  lastkeepAliveCnt += 1;
+  EEPROM.write(3, lastkeepAliveCnt);
+  EEPROM.commit();
+  
   Serial.print("Temp1 in EEPROM: ");Serial.println(lastTemp1);
   Serial.print("Temp2 in EEPROM: ");Serial.println(lastTemp3);
   Serial.print("Temp3 in EEPROM: ");Serial.println(lastTemp3);
@@ -84,65 +92,83 @@ void setup() {
   Serial.print("Temp1 in Sensor: ");Serial.println(temp1);
   Serial.print("Temp2 in Sensor: ");Serial.println(temp2);
   Serial.print("Temp3 in Sensor: ");Serial.println(temp3);
-  //Check if temp1,2,3 is different then from EEPROM and is more then 0.25 in different, if so we need to send the value to backend
-  if ( abs(lastTemp1 - temp1) > 0.50 || abs(lastTemp2 - temp2) > 0.50 || abs(lastTemp3 - temp3) > 0.50 )
+  
+  //Check if temp1,2,3 is different then from EEPROM and is more then 0.25 in different, if so we need to send the value
+  if( abs(lastTemp1 - temp1) > 1 || abs(lastTemp2 - temp2) > 1 || abs(lastTemp3 - temp3) > 1)
   {
+      
       EEPROM.write(0, temp1);
       EEPROM.write(1, temp2);
       EEPROM.write(2, temp3);
       EEPROM.commit();
-      EEPROM.end();
     
-    // Restart takes quite some time
-      // To skip it, call init() instead of restart()
-      Serial.println("Initializing modem...");
-    
-      //Power modem
-      pinMode(2, OUTPUT);
-      digitalWrite(2, HIGH);
-      delay(2000);
-      digitalWrite(2, LOW);
-      
-      modem.restart();
-    
-      Serial.print("Waiting for network...");
-      if (!modem.waitForNetwork()) {
-        Serial.println(" fail");
-        while (true);
-      }
-      Serial.println(" OK");
-    
-      Serial.print("Connecting to ");
-      Serial.print(apn);
-      if (!modem.gprsConnect(apn, user, pass)) {
-        Serial.println(" fail");
-        while (true);
-      }
-      
-      Serial.println(" OK");
-      Serial.print("Signal Quality: "); Serial.println(modem.getSignalQuality());
-      // MQTT Broker setup
-      mqtt.setServer(mqtt_server, mqtt_port);
-      mqtt.setCallback(mqttCallback);
-    
-     //Start MQTT
-      mqtt.loop();
-      delay(10);
-      if (!mqtt.connected()) 
-      {
-        yield();
-        reconnect();
-      }
+      connectModem();
       sendTemp(temp1,temp2,temp3);
+      //Disconnect Modem GPRS Connection
+      modem.gprsDisconnect();
   }else
   {
-    //Close EEPROM
-    EEPROM.end();  
+    //Check if we need to send I'm alive, after 6 Sleeps (10minutes sleep interval x 6 = 1 hour)
+    if (lastkeepAliveCnt == 6)
+    {
+       EEPROM.write(3, 0);
+       EEPROM.commit();
+      connectModem();
+      sendMqttMessage("I'm alive");
+      modem.gprsDisconnect();
+    }  
   }
   
+  //Close EEPROM Connection
+  EEPROM.end();
   Serial.println("Going to sleep for 10 minutes");
   //Go to sleep for 10 minutes
+  //Set Modem to Low Power Mode, GPIO1/INT or RST High through Trans, tie to GND to enter mode and High to start
   ESP.deepSleep(600000000, WAKE_RF_DISABLED);
+}
+
+void connectModem()
+{
+    // Restart takes quite some time
+    // To skip it, call init() instead of restart()
+    Serial.println("Initializing modem...");
+  
+    //Power modem
+    pinMode(2, OUTPUT);
+    digitalWrite(2, HIGH);
+    delay(2000);
+    digitalWrite(2, LOW);
+    
+    modem.restart();
+  
+    Serial.print("Waiting for network...");
+    if (!modem.waitForNetwork()) {
+      Serial.println(" fail");
+      while (true);
+    }
+    Serial.println(" OK");
+  
+    Serial.print("Connecting to ");
+    Serial.print(apn);
+    if (!modem.gprsConnect(apn, user, pass)) {
+      Serial.println(" fail");
+      while (true);
+    }
+    
+    Serial.println(" OK");
+    Serial.print("Signal Quality: "); Serial.println(modem.getSignalQuality());
+    // MQTT Broker setup
+    mqtt.setServer(mqtt_server, mqtt_port);
+    mqtt.setCallback(mqttCallback);
+  
+   //Start MQTT
+    mqtt.loop();
+    delay(10);
+    if (!mqtt.connected()) 
+    {
+      yield();
+      reconnect();
+    }
 }
 
 void mqttCallback(char* topic, byte* payload, unsigned int len) 
@@ -233,10 +259,10 @@ void reconnect()
         Serial.print("Attempting MQTT connection...");
         // Attempt to connect
         yield();
-        if (mqtt.connect(clientId)) 
+        if (mqtt.connect(clientId,"jancb","Bak007Ard")) 
         {
           yield();
-          Serial.println("connected");
+          Serial.println("Connected");
           yield();
           // Once connected, publish an announcement...
           mqtt.subscribe(subscribeTopic);
